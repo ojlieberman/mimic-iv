@@ -13,17 +13,22 @@ patient_info AS (
     p.gender,
     a.ethnicity,
     a.insurance,
-    a.marital_status,
-    CASE 
-      WHEN EXTRACT(YEAR FROM a.admittime) - EXTRACT(YEAR FROM p.dob) > 300 THEN 91
-      ELSE FLOOR(TIMESTAMP_DIFF(a.admittime, p.dob, DAY) / 365.25)
-    END AS age
+    a.marital_status
   FROM
     `physionet-data.mimic_core.patients` AS p
   INNER JOIN
     `physionet-data.mimic_core.admissions` AS a
   ON
     p.subject_id = a.subject_id
+),
+
+age_info AS (
+  SELECT
+    subject_id,
+    hadm_id,
+    age
+  FROM
+    `physionet-data.mimic_derived.age`
 ),
 
 sapsii_scores AS (
@@ -77,19 +82,19 @@ earliest_hba1c AS (
   FROM
     `physionet-data.mimic_hosp.labevents` AS l
   WHERE
-    l.itemid IN (50889) -- HbA1C
+    l.itemid IN (50889) -- HbA1c
     AND l.valuenum IS NOT NULL
   GROUP BY
     l.subject_id, l.hadm_id
 )
 
--- Final merged output
+-- Final output
 SELECT
   c.subject_id,
   c.hadm_id,
   c.stay_id,
   pi.gender,
-  pi.age,
+  age.age,
   pi.ethnicity,
   pi.insurance,
   pi.marital_status,
@@ -112,6 +117,11 @@ LEFT JOIN
 ON
   c.subject_id = pi.subject_id
   AND c.hadm_id = pi.hadm_id
+LEFT JOIN
+  age_info age
+ON
+  c.subject_id = age.subject_id
+  AND c.hadm_id = age.hadm_id
 LEFT JOIN
   sapsii_scores saps
 ON
