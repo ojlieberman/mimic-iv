@@ -1,0 +1,30 @@
+CREATE OR REPLACE TABLE `flowing-precept-335000.neuro_icu_glucose_1.cohort_1_times` AS
+WITH cohort AS (
+  SELECT subject_id, hadm_id, stay_id
+  FROM `flowing-precept-335000.neuro_icu_glucose_1.cohort_1`
+)
+
+SELECT
+  c.subject_id,
+  c.hadm_id,
+  c.stay_id,
+  a.admittime,
+  a.dischtime,
+  i.intime,
+  i.outtime
+FROM
+  cohort c
+LEFT JOIN
+  `physionet-data.mimic_core.admissions` a
+ON
+  c.subject_id = a.subject_id
+  AND c.hadm_id = a.hadm_id
+LEFT JOIN
+  `physionet-data.mimic_icu.icustays` i
+ON
+  c.subject_id = i.subject_id
+  AND c.hadm_id = i.hadm_id
+  AND c.stay_id = i.stay_id
+ORDER BY
+  c.subject_id
+;
