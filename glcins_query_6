@@ -1,0 +1,24 @@
+#all crp 
+CREATE OR REPLACE TABLE `flowing-precept-335000.neuro_icu_glucose_1.crp_all_data` AS
+WITH cohort AS (
+  SELECT subject_id, hadm_id
+  FROM `flowing-precept-335000.neuro_icu_glucose_1.cohort_1`
+)
+
+SELECT
+  i.subject_id,
+  i.hadm_id,
+  i.charttime,
+  i.crp
+FROM
+  `physionet-data.mimic_derived.inflammation` i
+INNER JOIN
+  cohort c
+ON
+  i.subject_id = c.subject_id
+  AND i.hadm_id = c.hadm_id
+WHERE
+  i.crp IS NOT NULL
+ORDER BY
+  i.subject_id, i.charttime
+;
