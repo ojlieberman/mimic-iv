@@ -1,0 +1,70 @@
+#pull sinsulin from inputevents and emar tables
+CREATE OR REPLACE TABLE `flowing-precept-335000.neuro_icu_glucose_1.insulin_combined` AS
+
+WITH cohort AS (
+  SELECT subject_id, hadm_id, stay_id
+  FROM `flowing-precept-335000.neuro_icu_glucose_1.cohort_1`
+),
+
+-- Pull IV insulin from inputevents
+inputevents_insulin AS (
+  SELECT
+    ie.subject_id,
+    ie.hadm_id,
+    c.stay_id,
+    ie.starttime AS charttime,
+    d.label AS medication,
+    ie.amount AS dose_given,
+    ie.amountuom AS dose_given_unit,
+    'inputevents' AS source
+  FROM
+    `physionet-data.mimic_icu.inputevents` ie
+  INNER JOIN
+    cohort c
+  ON
+    ie.subject_id = c.subject_id
+    AND ie.hadm_id = c.hadm_id
+  LEFT JOIN
+    `physionet-data.mimic_icu.d_items` d
+  ON
+    ie.itemid = d.itemid
+  WHERE
+    ie.itemid IN (
+      223257, -- Insulin Regular
+      223258, -- Insulin Aspart (Novolog)
+      223259, -- Insulin Glargine (Lantus)
+      223260, -- Insulin Lispro (Humalog)
+      223261  -- Insulin Detemir (Levemir)
+    )
+    AND ie.amount IS NOT NULL
+),
+
+-- Pull subcutaneous insulin from EMAR
+emar_insulin AS (
+  SELECT
+    em.subject_id,
+    em.hadm_id,
+    NULL AS stay_id, -- EMAR is hospital-wide, not ICU-specific
+    em.charttime,
+    em.medication,
+    em.dose_given AS dose_given,
+    em.dose_given_unit,
+    'emar' AS source
+  FROM
+    `physionet-data.mimic_hosp.emar` em
+  INNER JOIN
+    cohort c
+  ON
+    em.subject_id = c.subject_id
+    AND em.hadm_id = c.hadm_id
+  WHERE
+    LOWER(em.medication) LIKE '%insulin%'
+    AND em.dose_given IS NOT NULL
+)
+
+-- Combine both
+SELECT * FROM inputevents_insulin
+UNION ALL
+SELECT * FROM emar_insulin
+ORDER BY subject_id, charttime
+;
