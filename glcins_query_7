@@ -1,0 +1,25 @@
+CREATE OR REPLACE TABLE `flowing-precept-335000.neuro_icu_glucose_1.gcs_all_data` AS
+WITH cohort AS (
+  SELECT subject_id, stay_id
+  FROM `flowing-precept-335000.neuro_icu_glucose_1.cohort_1`
+)
+
+SELECT
+  g.subject_id,
+  g.stay_id,
+  g.charttime,
+  g.gcs,
+  g.gcs_motor,
+  g.gcs_verbal,
+  g.gcs_eyes,
+  g.gcs_unable
+FROM
+  `physionet-data.mimic_derived.gcs` g
+INNER JOIN
+  cohort c
+ON
+  g.subject_id = c.subject_id
+  AND g.stay_id = c.stay_id
+ORDER BY
+  g.subject_id, g.charttime
+;
