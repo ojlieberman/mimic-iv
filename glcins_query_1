@@ -1,0 +1,99 @@
+WITH neuro_icu_stays_all AS (
+  SELECT
+    icustays.subject_id,
+    icustays.hadm_id,
+    icustays.stay_id,
+    icustays.intime
+  FROM
+    `physionet-data.mimic_icu.icustays` AS icustays
+  WHERE
+    icustays.first_careunit IN (
+      'Neuro Stepdown',
+      'Neuro Surgical Intensive Care Unit',
+      'Neuro SICU',
+      'Neuro Intermediate'
+    )
+),
+
+neuro_icu_stays AS (
+  -- Pick only the FIRST ICU admission per patient
+  SELECT
+    subject_id,
+    hadm_id,
+    stay_id
+  FROM (
+    SELECT
+      subject_id,
+      hadm_id,
+      stay_id,
+      ROW_NUMBER() OVER (PARTITION BY subject_id ORDER BY intime ASC) AS rn
+    FROM
+      neuro_icu_stays_all
+  )
+  WHERE rn = 1
+),
+
+diagnoses_with_codes AS (
+  SELECT
+    diag.subject_id,
+    diag.hadm_id,
+    diag.icd_code,
+    diag.icd_version
+  FROM
+    `physionet-data.mimic_hosp.diagnoses_icd` AS diag
+),
+
+stroke_flags AS (
+  SELECT
+    n.subject_id,
+    n.hadm_id,
+    n.stay_id,
+    MAX(CASE WHEN d.icd_code LIKE 'I63%' THEN 1 ELSE 0 END) AS has_stroke,
+    MAX(CASE WHEN d.icd_code LIKE 'I61%' THEN 1 ELSE 0 END) AS has_ich,
+    MAX(CASE WHEN d.icd_code LIKE 'I60%' THEN 1 ELSE 0 END) AS has_sah
+  FROM
+    neuro_icu_stays n
+  INNER JOIN
+    diagnoses_with_codes d
+  ON
+    n.hadm_id = d.hadm_id
+  GROUP BY
+    n.subject_id,
+    n.hadm_id,
+    n.stay_id
+),
+
+brain_trauma_patients AS (
+  SELECT DISTINCT
+    n.subject_id,
+    n.hadm_id
+  FROM
+    neuro_icu_stays n
+  INNER JOIN
+    diagnoses_with_codes d
+  ON
+    n.hadm_id = d.hadm_id
+  WHERE
+    d.icd_code LIKE 'S06%'  -- Intracranial injury
+    OR d.icd_code LIKE 'S02.0%' -- Skull fracture
+    OR d.icd_code LIKE 'S02.1%' -- Skull fracture
+)
+
+-- Final output
+SELECT
+  s.subject_id,
+  s.hadm_id,
+  s.stay_id,
+  s.has_stroke,
+  s.has_ich,
+  s.has_sah
+FROM
+  stroke_flags s
+LEFT JOIN
+  brain_trauma_patients t
+ON
+  s.hadm_id = t.hadm_id
+WHERE
+  (s.has_stroke = 1 OR s.has_ich = 1 OR s.has_sah = 1)
+  AND t.hadm_id IS NULL
+;
