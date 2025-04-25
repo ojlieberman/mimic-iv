@@ -1,0 +1,75 @@
+#goal to extract all glucose values for cohort_1
+CREATE OR REPLACE TABLE `flowing-precept-335000.neuro_icu_glucose_1.glucose_data` AS
+WITH cohort AS (
+  SELECT subject_id, hadm_id, stay_id
+  FROM `flowing-precept-335000.neuro_icu_glucose_1.cohort_1`
+),
+
+lab_glucose AS (
+  SELECT
+    l.subject_id,
+    l.hadm_id,
+    c.stay_id,
+    l.charttime,
+    l.valuenum AS glucose_value,
+    'lab' AS source
+  FROM
+    `physionet-data.mimic_hosp.labevents` AS l
+  INNER JOIN
+    cohort c
+  ON
+    l.subject_id = c.subject_id
+    AND l.hadm_id = c.hadm_id
+  WHERE
+    l.itemid IN (
+      50809 -- 'Glucose' lab test
+    )
+    AND l.valuenum IS NOT NULL
+),
+
+chart_glucose AS (
+  SELECT
+    ce.subject_id,
+    ce.hadm_id,
+    c.stay_id,
+    ce.charttime,
+    ce.valuenum AS glucose_value,
+    'chart' AS source
+  FROM
+    `physionet-data.mimic_icu.chartevents` AS ce
+  INNER JOIN
+    cohort c
+  ON
+    ce.subject_id = c.subject_id
+    AND ce.hadm_id = c.hadm_id
+  WHERE
+    ce.itemid IN (
+      220621, -- 'Glucose (serum)'
+      225664  -- 'Fingerstick Glucose'
+    )
+    AND ce.valuenum IS NOT NULL
+)
+
+-- Combine and de-duplicate
+SELECT
+  subject_id,
+  hadm_id,
+  stay_id,
+  charttime,
+  glucose_value,
+  source
+FROM (
+  SELECT
+    *,
+    ROW_NUMBER() OVER (PARTITION BY subject_id, hadm_id, charttime ORDER BY 
+      CASE WHEN source = 'lab' THEN 1 ELSE 2 END -- Prefer lab over chart
+    ) AS rn
+  FROM (
+    SELECT * FROM lab_glucose
+    UNION ALL
+    SELECT * FROM chart_glucose
+  )
+)
+WHERE rn = 1
+ORDER BY subject_id, charttime
+;
