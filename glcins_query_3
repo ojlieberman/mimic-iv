@@ -1,0 +1,37 @@
+#Column	Meaning
+#unique_patients_with_glucose	Number of unique patients in glucose_data (after combining lab/chart glucose)
+#avg_glucose_measurements_first_24h	Average number of glucose measurements per patient in first 24 hours
+#total_patients_in_cohort	Total number of patients in your cohort_1 table
+#patients_with_glucose_in_24h	Number of patients from cohort who had at least 1 glucose check in first 24h
+-- Summary stats on glucose_data
+WITH first_24h_glucose AS (
+  SELECT
+    subject_id,
+    hadm_id,
+    stay_id,
+    charttime
+  FROM
+    `flowing-precept-335000.neuro_icu_glucose_1.glucose_data`
+  WHERE
+    charttime IS NOT NULL
+)
+
+SELECT
+  COUNT(DISTINCT subject_id) AS unique_patients_with_glucose,
+  AVG(glucose_count) AS avg_glucose_measurements_first_24h,
+  (SELECT COUNT(*) FROM `flowing-precept-335000.neuro_icu_glucose_1.cohort_1`) AS total_patients_in_cohort,
+  COUNT(DISTINCT g.subject_id) AS patients_with_glucose_in_24h
+FROM (
+  SELECT
+    subject_id,
+    hadm_id,
+    stay_id,
+    COUNT(*) AS glucose_count
+  FROM
+    first_24h_glucose
+  WHERE
+    DATETIME_DIFF(charttime, DATETIME_SUB(charttime, INTERVAL 24 HOUR), HOUR) <= 24
+  GROUP BY
+    subject_id, hadm_id, stay_id
+) AS g
+;
