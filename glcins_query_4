@@ -1,0 +1,56 @@
+#insulin data extraction
+#✅ Pull insulin administrations for patients in your cohort_1.
+#✅ Only pick administrations where amount > 0 (meaning actually given).
+#✅ Label each row: how much insulin was given, at what time, etc.
+#✅ Include subject_id, hadm_id, stay_id, starttime, amount, rate, itemid.
+#In MIMIC-IV:
+#IV insulin drips and boluses are logged in mimic_icu.inputevents.
+#Relevant insulin itemids include:
+#223257 – Insulin Regular (drip/bolus)
+#223258 – Insulin Aspart (Novolog)
+#223259 – Insulin Glargine (Lantus)
+#223260 – Insulin Lispro (Humalog)
+#223261 – Insulin Detemir (Levemir)
+#(But usually, for infusions, the main one is 223257, Insulin Regular.)
+#We'll focus primarily on IV insulin administration.
+CREATE OR REPLACE TABLE `flowing-precept-335000.neuro_icu_glucose_1.insulin_data` AS
+WITH cohort AS (
+  SELECT subject_id, hadm_id, stay_id
+  FROM `flowing-precept-335000.neuro_icu_glucose_1.cohort_1`
+)
+
+SELECT
+  ie.subject_id,
+  ie.hadm_id,
+  c.stay_id,
+  ie.starttime,
+  ie.endtime,
+  ie.itemid,
+  d.label AS insulin_type,
+  ie.amount,
+  ie.amountuom,
+  ie.rate,
+  ie.rateuom
+FROM
+  `physionet-data.mimic_icu.inputevents` AS ie
+INNER JOIN
+  cohort c
+ON
+  ie.subject_id = c.subject_id
+  AND ie.hadm_id = c.hadm_id
+LEFT JOIN
+  `physionet-data.mimic_icu.d_items` AS d
+ON
+  ie.itemid = d.itemid
+WHERE
+  ie.itemid IN (
+    223257, -- Insulin Regular
+    223258, -- Insulin Aspart (Novolog)
+    223259, -- Insulin Glargine (Lantus)
+    223260, -- Insulin Lispro (Humalog)
+    223261  -- Insulin Detemir (Levemir)
+  )
+  AND (ie.amount IS NOT NULL OR ie.rate IS NOT NULL)
+ORDER BY
+  subject_id, starttime
+;
