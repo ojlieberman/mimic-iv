@@ -1,0 +1,142 @@
+#demo, severity, labs
+
+CREATE OR REPLACE TABLE `flowing-precept-335000.neuro_icu_glucose_1.demographics_labs_scores` AS
+WITH cohort AS (
+  SELECT subject_id, hadm_id, stay_id
+  FROM `flowing-precept-335000.neuro_icu_glucose_1.cohort_1`
+),
+
+patient_info AS (
+  SELECT
+    p.subject_id,
+    a.hadm_id,
+    p.gender,
+    a.ethnicity,
+    a.insurance,
+    a.marital_status,
+    CASE 
+      WHEN EXTRACT(YEAR FROM a.admittime) - EXTRACT(YEAR FROM p.dob) > 300 THEN 91
+      ELSE FLOOR(TIMESTAMP_DIFF(a.admittime, p.dob, DAY) / 365.25)
+    END AS age
+  FROM
+    `physionet-data.mimic_core.patients` AS p
+  INNER JOIN
+    `physionet-data.mimic_core.admissions` AS a
+  ON
+    p.subject_id = a.subject_id
+),
+
+sapsii_scores AS (
+  SELECT
+    subject_id,
+    stay_id,
+    sapsii
+  FROM
+    `physionet-data.mimic_derived.sapsii`
+),
+
+charlson_scores AS (
+  SELECT
+    subject_id,
+    hadm_id,
+    charlson_comorbidity_index
+  FROM
+    `physionet-data.mimic_derived.charlson`
+),
+
+gcs_all AS (
+  SELECT
+    subject_id,
+    stay_id,
+    charttime,
+    gcsverbal,
+    gcsverbalunk,
+    gcsmotor,
+    gcseyes,
+    gcstotal
+  FROM
+    `physionet-data.mimic_derived.gcs`
+),
+
+crp_values AS (
+  SELECT
+    subject_id,
+    hadm_id,
+    charttime,
+    crp
+  FROM
+    `physionet-data.mimic_derived.inflammation`
+),
+
+earliest_hba1c AS (
+  SELECT
+    l.subject_id,
+    l.hadm_id,
+    MIN(l.charttime) AS first_hba1c_time,
+    MIN(l.valuenum) AS first_hba1c_value
+  FROM
+    `physionet-data.mimic_hosp.labevents` AS l
+  WHERE
+    l.itemid IN (50889) -- HbA1C
+    AND l.valuenum IS NOT NULL
+  GROUP BY
+    l.subject_id, l.hadm_id
+)
+
+-- Final merged output
+SELECT
+  c.subject_id,
+  c.hadm_id,
+  c.stay_id,
+  pi.gender,
+  pi.age,
+  pi.ethnicity,
+  pi.insurance,
+  pi.marital_status,
+  saps.sapsii,
+  ch.charlson_comorbidity_index,
+  gcs.charttime AS gcs_charttime,
+  gcs.gcsverbal,
+  gcs.gcsverbalunk,
+  gcs.gcsmotor,
+  gcs.gcseyes,
+  gcs.gcstotal,
+  crp.charttime AS crp_charttime,
+  crp.crp,
+  hba.first_hba1c_time,
+  hba.first_hba1c_value
+FROM
+  cohort c
+LEFT JOIN
+  patient_info pi
+ON
+  c.subject_id = pi.subject_id
+  AND c.hadm_id = pi.hadm_id
+LEFT JOIN
+  sapsii_scores saps
+ON
+  c.subject_id = saps.subject_id
+  AND c.stay_id = saps.stay_id
+LEFT JOIN
+  charlson_scores ch
+ON
+  c.subject_id = ch.subject_id
+  AND c.hadm_id = ch.hadm_id
+LEFT JOIN
+  gcs_all gcs
+ON
+  c.subject_id = gcs.subject_id
+  AND c.stay_id = gcs.stay_id
+LEFT JOIN
+  crp_values crp
+ON
+  c.subject_id = crp.subject_id
+  AND c.hadm_id = crp.hadm_id
+LEFT JOIN
+  earliest_hba1c hba
+ON
+  c.subject_id = hba.subject_id
+  AND c.hadm_id = hba.hadm_id
+ORDER BY
+  c.subject_id, gcs.charttime
+;
