@@ -1,3 +1,9 @@
+#Only the first Neuro ICU stay per subject_id is kept.
+#No duplicate patients.
+#Still checks for stroke / ICH / SAH diagnoses.
+#Still excludes traumatic brain injury admissions.
+#Still returns has_stroke, has_ich, has_sah flags.
+
 WITH neuro_icu_stays_all AS (
   SELECT
     icustays.subject_id,
