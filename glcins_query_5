@@ -1,5 +1,3 @@
-#demo, severity, labs
-
 CREATE OR REPLACE TABLE `flowing-precept-335000.neuro_icu_glucose_1.demographics_labs_scores` AS
 WITH cohort AS (
   SELECT subject_id, hadm_id, stay_id
@@ -49,30 +47,6 @@ charlson_scores AS (
     `physionet-data.mimic_derived.charlson`
 ),
 
-gcs_all AS (
-  SELECT
-    subject_id,
-    stay_id,
-    charttime,
-    gcsverbal,
-    gcsverbalunk,
-    gcsmotor,
-    gcseyes,
-    gcstotal
-  FROM
-    `physionet-data.mimic_derived.gcs`
-),
-
-crp_values AS (
-  SELECT
-    subject_id,
-    hadm_id,
-    charttime,
-    crp
-  FROM
-    `physionet-data.mimic_derived.inflammation`
-),
-
 earliest_hba1c AS (
   SELECT
     l.subject_id,
@@ -82,13 +56,13 @@ earliest_hba1c AS (
   FROM
     `physionet-data.mimic_hosp.labevents` AS l
   WHERE
-    l.itemid IN (50889) -- HbA1c
+    l.itemid = 50889 -- HbA1c
     AND l.valuenum IS NOT NULL
   GROUP BY
     l.subject_id, l.hadm_id
 )
 
--- Final output
+-- Final SELECT: demographics + scores only
 SELECT
   c.subject_id,
   c.hadm_id,
@@ -100,14 +74,6 @@ SELECT
   pi.marital_status,
   saps.sapsii,
   ch.charlson_comorbidity_index,
-  gcs.charttime AS gcs_charttime,
-  gcs.gcsverbal,
-  gcs.gcsverbalunk,
-  gcs.gcsmotor,
-  gcs.gcseyes,
-  gcs.gcstotal,
-  crp.charttime AS crp_charttime,
-  crp.crp,
   hba.first_hba1c_time,
   hba.first_hba1c_value
 FROM
@@ -133,20 +99,10 @@ ON
   c.subject_id = ch.subject_id
   AND c.hadm_id = ch.hadm_id
 LEFT JOIN
-  gcs_all gcs
-ON
-  c.subject_id = gcs.subject_id
-  AND c.stay_id = gcs.stay_id
-LEFT JOIN
-  crp_values crp
-ON
-  c.subject_id = crp.subject_id
-  AND c.hadm_id = crp.hadm_id
-LEFT JOIN
   earliest_hba1c hba
 ON
   c.subject_id = hba.subject_id
   AND c.hadm_id = hba.hadm_id
 ORDER BY
-  c.subject_id, gcs.charttime
+  c.subject_id
 ;
