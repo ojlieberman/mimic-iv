@@ -1,4 +1,5 @@
 CREATE OR REPLACE TABLE `flowing-precept-335000.neuro_icu_glucose_1.demographics_labs_scores` AS
+
 WITH cohort AS (
   SELECT subject_id, hadm_id, stay_id
   FROM `flowing-precept-335000.neuro_icu_glucose_1.cohort_1`
@@ -56,7 +57,7 @@ earliest_hba1c AS (
   FROM
     `physionet-data.mimic_hosp.labevents` AS l
   WHERE
-    l.itemid = 50889 -- HbA1c
+    l.itemid IN (50854, 50852) -- HbA1c
     AND l.valuenum IS NOT NULL
   GROUP BY
     l.subject_id, l.hadm_id
