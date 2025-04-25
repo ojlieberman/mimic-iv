@@ -1,9 +1,4 @@
-#Only the first Neuro ICU stay per subject_id is kept.
-#No duplicate patients.
-#Still checks for stroke / ICH / SAH diagnoses.
-#Still excludes traumatic brain injury admissions.
-#Still returns has_stroke, has_ich, has_sah flags.
-
+CREATE OR REPLACE TABLE `flowing-precept-335000.neuro_icu_glucose_1.cohort_1` AS 
 WITH neuro_icu_stays_all AS (
   SELECT
     icustays.subject_id,
@@ -22,7 +17,6 @@ WITH neuro_icu_stays_all AS (
 ),
 
 neuro_icu_stays AS (
-  -- Pick only the FIRST ICU admission per patient
   SELECT
     subject_id,
     hadm_id,
@@ -80,12 +74,11 @@ brain_trauma_patients AS (
   ON
     n.hadm_id = d.hadm_id
   WHERE
-    d.icd_code LIKE 'S06%'  -- Intracranial injury
-    OR d.icd_code LIKE 'S02.0%' -- Skull fracture
-    OR d.icd_code LIKE 'S02.1%' -- Skull fracture
+    d.icd_code LIKE 'S06%'
+    OR d.icd_code LIKE 'S02.0%'
+    OR d.icd_code LIKE 'S02.1%'
 )
 
--- Final output
 SELECT
   s.subject_id,
   s.hadm_id,
